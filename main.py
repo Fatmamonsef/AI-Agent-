@@ -1,4 +1,5 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from pydantic import BaseModel
 from correction import (
     detect_language,
     detect_errors,
@@ -6,56 +7,98 @@ from correction import (
     calculate_accuracy,
 )
 
-app = FastAPI(title="AI Text Correction API", version="1.0.0")
+app = FastAPI(
+    title="AI Text Correction API",
+    version="1.0.0"
+)
+
 
 @app.get("/")
 def home():
     return {"message": "AI Text Correction API is running"}
 
-@app.post("/correct")
-async def correct_endpoint(
-    file: UploadFile | None = File(None), 
-    text: str | None = Form(None)  # Form عشان يشتغل مع multipart
-):
-    transcript = None
-    
-    # 1. لو جاي File ليه الاولوية
-    if file:
-        if not file.filename.endswith(".txt"):
-            raise HTTPException(status_code=400, detail="Please upload a .txt file.")
-        try:
-            content = await file.read()
-            for encoding in ["utf-8", "utf-8-sig", "cp1256", "cp1252", "utf-16"]:
-                try:
-                    transcript = content.decode(encoding)
-                    break
-                except UnicodeDecodeError:
-                    continue
-            if transcript is None:
-                raise HTTPException(status_code=400, detail="Unsupported file encoding.")
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
-    
-    # 2. لو مش File يبقى لازم يبقى Text
-    elif text and text.strip():
-        transcript = text
-    
-    # 3. لو مفيش الاتنين
-    else:
-        raise HTTPException(status_code=400, detail="Send 'file' or 'text'.")
 
-    # 4. هنا الكود بتاعك هيشتغل مرة واحدة على الـ transcript
+@app.post("/correct")
+async def correct_file(file: UploadFile = File(...)):
+
+    if not file.filename.endswith(".txt"):
+        raise HTTPException(
+            status_code=400,
+            detail="Please upload a .txt transcript file."
+        )
+
     try:
+        content = await file.read()
+
+        transcript = None
+
+        for encoding in ["utf-8", "utf-8-sig", "cp1256", "cp1252", "utf-16"]:
+            try:
+                transcript = content.decode(encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+
+        if transcript is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Unsupported file encoding."
+            )
+
         language = detect_language(transcript)
+
         errors = detect_errors(transcript)
+
         corrected = correct_text(transcript)
+
         accuracy = calculate_accuracy(transcript, corrected)
+
         return {
-            "input_type": "file" if file else "text",
+            "filename": file.filename,
             "language": language,
             "errors": errors,
             "corrected_text": corrected,
             "accuracy": accuracy,
         }
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
+
+
+class CorrectTextRequest(BaseModel):
+    transcript: str
+
+
+@app.post("/correct-text")
+async def correct_text_endpoint(request: CorrectTextRequest):
+
+    if not request.transcript or not request.transcript.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Transcript is empty."
+        )
+
+    try:
+        language = detect_language(request.transcript)
+
+        errors = detect_errors(request.transcript)
+
+        corrected = correct_text(request.transcript)
+
+        accuracy = calculate_accuracy(request.transcript, corrected)
+
+        return {
+            "language": language,
+            "errors": errors,
+            "corrected_text": corrected,
+            "accuracy": accuracy,
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
