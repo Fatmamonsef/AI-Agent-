@@ -82,7 +82,7 @@ def clean_word(word):
 def detect_errors(text):
     """كشف الأخطاء الإملائية في النص"""
     language = detect_language(text)
-    tokens = re.findall(r"[A-Za-z']+|[\u0600-\u06FF]+", text)
+    tokens = re.findall(r'[\w\u0600-\u06FF]+', text)
     errors = []
 
     if language == "ar":
@@ -103,8 +103,8 @@ def correct_english(text):
         clean = clean_word(word)
         
         # تحقق إذا كانت الكلمة صحيحة
-        if not spell_en.unknown([clean.lower()]):
-         corrected_words.append(word)
+        if clean.lower() in spell_en:
+            corrected_words.append(word)
         else:
             # حاول تصحيح الكلمة
             correction = spell_en.correction(clean)
@@ -123,8 +123,8 @@ def correct_english(text):
                 corrected_text,
                 matches
             )
-        except Exception:
-          pass
+        except:
+            pass
 
     return corrected_text
 ## Correct Arabic Text
@@ -152,9 +152,8 @@ def correct_arabic(text):
     phrase_corrections = {k: v for k, v in correction_map.items() if ' ' in k}
     word_corrections = {k: v for k, v in correction_map.items() if ' ' not in k}
 
-    correct_values = set(word_corrections.values())
-
     corrected_text = text.strip()
+
     for phrase, replacement in sorted(phrase_corrections.items(), key=lambda item: len(item[0]), reverse=True):
         corrected_text = re.sub(rf'\b{re.escape(phrase)}\b', replacement, corrected_text)
 
@@ -171,13 +170,13 @@ def correct_arabic(text):
             corrected_tokens.append(word_corrections[clean])
             continue
 
-        if clean in correct_values:
+        if clean in set(word_corrections.values()):
             corrected_tokens.append(clean)
             continue
 
-        if not spell_ar.unknown([clean]):
-         corrected_tokens.append(token)
-         continue
+        if clean in spell_ar:
+            corrected_tokens.append(token)
+            continue
 
         candidates = list(spell_ar.candidates(clean) or [])
         if not candidates:
