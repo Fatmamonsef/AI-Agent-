@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+requests
+pyspellchecker
+language-tool-python
+langdetect
+pydantic
+python-multipart
